@@ -1,16 +1,15 @@
 #!/bin/sh
 
 # домашний каталог установлен по умолчанию HOME=/Users/XXXX
-BIN=$HOME/bin           # каталог, где будет расположен ваш cmake
-LOG=$BIN/output         # результат выполнения - полезен для отладки
-DEBUG=$BIN/debug        # журнал вызовов - полезен для отладки
-SRC=$HOME/src           # каталог с исходниками, он будет проброшен в docker
-CMAKE=cmake3            # команда для вызова cmake на удаленном хосте
+BIN=$HOME/bin		# каталог, где будет расположен ваш cmake
+LOG=$BIN/output		# результат выполнения - полезен для отладки
+DEBUG=$BIN/debug	# журнал вызовов - полезен для отладки
+SRC=$HOME/src		# каталог с исходниками, он будет проброшен в docker
+CMAKE=cmake3		# команда для вызова cmake на удаленном хосте
 MAKE="$BIN/make"
 
 SSH="docker run -i --rm -v $SRC:$SRC:delegated -e HOME=$SRC hostname:5005/docker/clang-conan:5 /bin/sh"
-#PREPARE="ln -s /usr/lib64/ccache $BIN; export PATH=\"$BIN:\$PATH\"; export CCACHE_DIR=$SRC/.ccache;"
-PREPARE="mkdir $BIN; ln -s /usr/bin/clang++ $BIN; ln -s /usr/bin/clang $BIN;"
+PREPARE="mkdir $BIN; ln -s /usr/bin/clang++ $BIN; ln -s /usr/bin/clang $BIN; export PATH=\"$BIN:\$PATH\";"
 pwd >> $DEBUG
 echo "$@" >> $DEBUG
 if [ "$3" != "" ]; then
@@ -38,18 +37,17 @@ if [ "$3" != "" ]; then
           sh -c "/Applications/CLion.app/Contents/bin/cmake/bin/cmake -DCMAKE_C_COMPILER=$HOME/bin/clang -DCMAKE_CXX_COMPILER=$HOME/bin/clang++ $COMMAND"
         fi
       else
-        WDS=_
-        WDS="$WD$WDS"
+        WDS="${WD%/*}/build"
         if [ $1 == "--build" ]; then
-          COMMAND="$PREPARE mkdir -p /tmp$WD; rsync -a $WDS/ /tmp$WD; $CMAKE"
-          for cmd; do if [ "$cmd" = "$WD" ]; then cmd=/tmp$WD; fi; COMMAND="$COMMAND \"$cmd\""; done
-          COMMAND="$COMMAND; rsync -a /tmp/$WD/ $WDS"
+          COMMAND="$PREPARE mkdir -p /tmp/clion.make$WD; rsync -a $WDS/ /tmp/clion.make$WDS; $CMAKE"
+          for cmd; do if [ "$cmd" = "$WD" ]; then cmd=/tmp/clion.make$WDS; fi; COMMAND="$COMMAND \"$cmd\""; done
+          COMMAND="$COMMAND; rsync -a /tmp/clion.make$WDS/ $WDS"
         else
-          COMMAND="$PREPARE cd $WD; conan install .. --build missing; $CMAKE"
+          COMMAND="$PREPARE cd $WD; conan install .. -r ispsystem --build missing; $CMAKE"
           for cmd; do COMMAND="$COMMAND \"$cmd\""; done
-          COMMAND="$COMMAND; mkdir -p /tmp$WD; mkdir -p $WDS; rsync -a $WDS/ /tmp$WD; cd /tmp$WD; cp $WD/conanbuildinfo.cmake /tmp$WD/; $CMAKE"
+          COMMAND="$COMMAND; mkdir -p /tmp/clion.make$WDS; mkdir -p $WDS; rsync -a $WDS/ /tmp/clion.make$WDS; cd /tmp/clion.make$WDS; cp $WD/conanbuildinfo.cmake /tmp/clion.make$WDS/; $CMAKE"
           for cmd; do if [ "$cmd" = "CodeBlocks - Unix Makefiles" ]; then cmd=Ninja; fi; COMMAND="$COMMAND \"$cmd\""; done
-          COMMAND="$COMMAND; rsync -a /tmp$WD/ $WDS"
+          COMMAND="$COMMAND; rsync -a /tmp/clion.make$WDS/ $WDS; rsync -a /opt/ispsystem $WDS; rsync -a /usr/lib64/libc++.so.1* /usr/lib64/libc++abi.so.1* $WDS/libs/"
         fi
         echo "COMMAND=$COMMAND" >> $DEBUG
         echo "$COMMAND" | $SSH
