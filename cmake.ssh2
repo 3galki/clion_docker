@@ -7,8 +7,9 @@ DEBUG=$BIN/debug	# журнал вызовов - полезен для отла�
 SRC=$HOME/src		# каталог с исходниками, он будет проброшен в docker
 CMAKE=cmake3		# команда для вызова cmake на удаленном хосте
 MAKE="$BIN/make"
+HOST=root@distcc
 
-SSH="docker run -i --rm -v $SRC:$SRC:delegated -e HOME=$SRC nostname:5005/docker/clang-conan:5 /bin/sh"
+SSH="docker run -i --rm -v $SRC:$SRC:delegated -e HOME=$SRC hostname:5005/docker/clang-conan:5 /bin/sh"
 PREPARE="mkdir -p $BIN; if [ ! -f /usr/bin/clang++ ]; then ln -s /usr/bin/clang++ $BIN; fi; if [ ! -f /usr/bin/clang ]; then ln -s /usr/bin/clang $BIN; fi; export PATH=\"$BIN:\$PATH\"; export CC=clang; export CXX=clang++; export HOME=$SRC;"
 pwd >> $DEBUG
 echo "$@" >> $DEBUG
@@ -40,23 +41,23 @@ if [ "$3" != "" ]; then
         PARENT=${WD%/*}
         WDS="$PARENT/build"
         if [ $1 == "--build" ]; then
-          rsync -vcr --delete -e 'ssh -p 2522' --exclude .idea --exclude .git --exclude build --exclude 'cmake-build-*' $PARENT/ root@distcc:$PARENT
+          rsync -vcrlH --delete -e 'ssh -p 2522' --exclude .idea --exclude .git --exclude build --exclude 'cmake-build-*' $PARENT/ $HOST:$PARENT
           COMMAND="$PREPARE cd $WDS; rm -rf dist; DESTDIR=dist ninja install"
-          echo $COMMAND | ssh -p 2522 root@distcc /bin/bash && \
-              rsync -vcr --delete -e 'ssh -p 2522' root@distcc:$WDS/ $WDS
+          echo $COMMAND | ssh -p 2522 $HOST /bin/bash && \
+              rsync -vcrlH --delete -e 'ssh -p 2522' $HOST:$WDS/ $WDS
         else
-          ssh -p 2522 root@distcc mkdir -p $WD
-          #rsync -vcr --delete -e 'ssh -p 2522' $SRC/.conan/ root@distcc:$SRC/.conan
-          rsync -vcr --delete --exclude build --exclude 'cmake-build-*' --exclude .git --exclude .idea -e 'ssh -p 2522' $PARENT/ root@distcc:$PARENT
-          #rsync -vcr --delete -e 'ssh -p 2522' $PARENT/ root@distcc:$PARENT
+          ssh -p 2522 $HOST mkdir -p $WD
+          #rsync -vcrlH --delete -e 'ssh -p 2522' $SRC/.conan/ $HOST:$SRC/.conan
+          rsync -vcrlH --delete --exclude build --exclude 'cmake-build-*' --exclude .git --exclude .idea -e 'ssh -p 2522' $PARENT/ $HOST:$PARENT
+          #rsync -vcrlH --delete -e 'ssh -p 2522' $PARENT/ $HOST:$PARENT
           COMMAND="$PREPARE cd $WD; conan install .. -r ispsystem --build missing; $CMAKE"
           for cmd; do COMMAND="$COMMAND \"$cmd\""; done
           COMMAND="$COMMAND; mkdir -p $WDS; cp -u $WD/conanbuildinfo.cmake $WDS/; cd $WDS; $CMAKE"
           for cmd; do if [ "$cmd" = "CodeBlocks - Unix Makefiles" ]; then cmd=Ninja; fi; COMMAND="$COMMAND \"$cmd\""; done
           COMMAND="$COMMAND; rsync -a /usr/lib64/libc++.so.1* /usr/lib64/libc++abi.so.1* $WDS/libs/"
-          echo "$COMMAND" | ssh -p 2522 root@distcc /bin/bash && \
-              rsync -vcr -e 'ssh -p 2522' root@distcc:$SRC/.conan/ $SRC/.conan && \
-              rsync -vcr --delete --exclude .git --exclude .idea -e 'ssh -p 2522' root@distcc:$PARENT/ $PARENT
+          echo "$COMMAND" | ssh -p 2522 $HOST /bin/bash && \
+              rsync -vcrlH -e 'ssh -p 2522' $HOST:$SRC/.conan/ $SRC/.conan && \
+              rsync -vcrlH --delete --exclude .git --exclude .idea -e 'ssh -p 2522' $HOST:$PARENT/ $PARENT
         fi
         echo "COMMAND=$COMMAND" >> $DEBUG
       fi
